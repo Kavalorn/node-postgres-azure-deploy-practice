@@ -9,12 +9,14 @@ const { Pool } = require('pg');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const connectionString = process.env.DATABASE_URL;
-
 // Configure PostgreSQL connection
 const pool = new Pool({
-  connectionString: connectionString,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  user: process.env.AZURE_POSTGRESQL_USER,
+  password: process.env.AZURE_POSTGRESQL_PASSWORD,
+  host: process.env.AZURE_POSTGRESQL_HOST,
+  port: process.env.AZURE_POSTGRESQL_PORT,
+  database: process.env.AZURE_POSTGRESQL_DATABASE,
+  ssl: process.env.AZURE_POSTGRESQL_SSL === 'true' ? { rejectUnauthorized: false } : false
 });
 
 async function initDatabase() {
