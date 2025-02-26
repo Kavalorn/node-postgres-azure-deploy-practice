@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Список завдань</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-100">
+  <div x-data="todoApp()" class="max-w-2xl mx-auto p-6 font-sans">
+    <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Список завдань</h1>
+    
+    <!-- Add Todo Form -->
+    <div class="flex mb-6">
+      <input
+        type="text"
+        placeholder="Що потрібно зробити?"
+        x-model="newTodo"
+        @keydown.enter="addTodo()"
+        class="flex-grow p-3 border border-gray-300 rounded-l text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+      <button 
+        @click="addTodo()"
+        class="px-4 bg-green-500 text-white font-medium rounded-r hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 transition"
+      >
+        Додати
+      </button>
+    </div>
+    
+    <!-- Filters -->
+    <div class="flex flex-wrap gap-2 mb-4">
+      <button 
+        @click="filter = 'all'"
+        :class="filter === 'all' ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+        class="px-3 py-2 border rounded font-medium text-sm transition"
+      >
+        Усі
+      </button>
+      <button 
+        @click="filter = 'active'"
+        :class="filter === 'active' ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+        class="px-3 py-2 border rounded font-medium text-sm transition"
+      >
+        Активні (<span x-text="activeTodos.length"></span>)
+      </button>
+      <button 
+        @click="filter = 'completed'"
+        :class="filter === 'completed' ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+        class="px-3 py-2 border rounded font-medium text-sm transition"
+      >
+        Завершені (<span x-text="completedTodos.length"></span>)
+      </button>
+      
+      <button 
+        x-show="completedTodos.length > 0"
+        @click="clearCompleted()"
+        class="px-3 py-2 ml-auto bg-red-500 text-white rounded text-sm font-medium hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition"
+      >
+        Очистити завершені
+      </button>
+    </div>
+    
+    <!-- Todo List -->
+    <div class="bg-white rounded-md shadow-md">
+      <!-- Loading State -->
+      <div x-show="loading" class="p-8 text-center text-gray-500">
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+        <p class="mt-2">Завантаження завдань...</p>
+      </div>
+      
+      <!-- Empty State -->
+      <div x-show="!loading && filteredTodos.length === 0" class="p-8 text-center text-gray-500 bg-gray-50 rounded-md">
+        <template x-if="todos.length === 0">
+          Ще немає завдань. Додайте одне вище!
+        </template>
+        <template x-if="todos.length > 0 && filter === 'active' && activeTodos.length === 0">
+          Немає активних завдань.
+        </template>
+        <template x-if="todos.length > 0 && filter === 'completed' && completedTodos.length === 0">
+          Немає завершених завдань.
+        </template>
+      </div>
+      
+      <!-- Todo Items -->
+      <template x-for="todo in filteredTodos" :key="todo.id">
+        <div class="p-3 border-b border-gray-200 group" :class="{'opacity-75': todo.completed}">
+          <div x-show="!todo.editing" class="flex items-center w-full">
+            <input 
+              type="checkbox" 
+              :checked="todo.completed"
+              @change="toggleTodo(todo)"
+              class="w-5 h-5 mr-3 cursor-pointer accent-blue-500 focus:ring-2 focus:ring-blue-500"
+            />
+            <span 
+              @dblclick="startEditing(todo)"
+              class="flex-grow mr-4 cursor-pointer"
+              :class="{'line-through text-gray-500': todo.completed}"
+              x-text="todo.text"
+            ></span>
+            <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button 
+                @click="startEditing(todo)"
+                class="px-2 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+              >
+                Редагувати
+              </button>
+              <button 
+                @click="removeTodo(todo)"
+                class="px-2 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition"
+              >
+                Видалити
+              </button>
+            </div>
+          </div>
+          
+          <div x-show="todo.editing" class="flex flex-col w-full">
+            <input 
+              type="text" 
+              x-model="todo.editText"
+              @keydown.enter="saveTodo(todo)"
+              @keydown.escape="cancelEditing(todo)"
+              class="w-full p-2 mb-2 border border-gray-300 rounded text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+              x-effect="$el.focus()"
+            />
+            <div class="flex justify-end gap-2">
+              <button 
+                @click="saveTodo(todo)"
+                class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 transition"
+              >
+                Зберегти
+              </button>
+              <button 
+                @click="cancelEditing(todo)"
+                class="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 transition"
+              >
+                Скасувати
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+    
+    <!-- Footer -->
+  </div>
+
+  <script>
+    function todoApp() {
+      return {
+        newTodo: '',
+        filter: 'all',
+        todos: [],
+        loading: true,
+        
+        // Initialize app
+        init() {
+          axios.defaults.baseURL = '/api';
+          this.fetchTodos();
+        },
+        
+        // API interaction methods
+        async fetchTodos() {
+          this.loading = true;
+          const response = await axios.get('/todos');
+          this.todos = response.data;
+          this.loading = false;
+        },
+        
+        async addTodo() {
+          if (!this.newTodo.trim()) return;
+          
+          const response = await axios.post('/todos', { 
+            text: this.newTodo.trim() 
+          });
+          
+          this.todos.push({
+            ...response.data,
+            editing: false,
+            editText: ''
+          });
+          
+          this.newTodo = '';
+        },
+        
+        async toggleTodo(todo) {
+          // Optimistic update
+          todo.completed = !todo.completed;
+          
+          const response = await axios.patch(`/todos/${todo.id}/toggle`);
+          // Update with server value
+          todo.completed = response.data.completed;
+        },
+        
+        async removeTodo(todo) {
+          // Optimistic update
+          const index = this.todos.findIndex(t => t.id === todo.id);
+          this.todos.splice(index, 1);
+          
+          await axios.delete(`/todos/${todo.id}`);
+        },
+        
+        async clearCompleted() {
+          // Optimistic update
+          this.todos = this.todos.filter(todo => !todo.completed);
+          
+          await axios.delete('/todos/completed');
+        },
+        
+        startEditing(todo) {
+          // Reset any other editing todos
+          this.todos.forEach(t => {
+            if (t.id !== todo.id) {
+              t.editing = false;
+            }
+          });
+          
+          todo.editing = true;
+          todo.editText = todo.text;
+        },
+        
+        async saveTodo(todo) {
+          if (!todo.editText.trim()) return;
+          
+          // Optimistic update
+          todo.text = todo.editText.trim();
+          todo.editing = false;
+          
+          await axios.put(`/todos/${todo.id}`, { 
+            text: todo.text 
+          });
+        },
+        
+        cancelEditing(todo) {
+          todo.editing = false;
+        },
+        
+        // Computed properties
+        get filteredTodos() {
+          if (this.filter === 'active') return this.todos.filter(todo => !todo.completed);
+          if (this.filter === 'completed') return this.todos.filter(todo => todo.completed);
+          return this.todos;
+        },
+        
+        get activeTodos() {
+          return this.todos.filter(todo => !todo.completed);
+        },
+        
+        get completedTodos() {
+          return this.todos.filter(todo => todo.completed);
+        }
+      };
+    }
+  </script>
+</body>
+</html>
