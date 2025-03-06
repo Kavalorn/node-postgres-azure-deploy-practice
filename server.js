@@ -40,6 +40,28 @@ initDatabase();
 
 app.use(cors());
 app.use(express.json());
+
+app.use((req, res, next) => {
+  const start = Date.now();
+  const originalSend = res.send;
+  const timestamp = new Date().toISOString();
+  
+  // Log request with body (if exists)
+  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+    console.log(`[${timestamp}] ${req.method} ${req.originalUrl} - Request Body:`, JSON.stringify(req.body));
+  } else {
+    console.log(`[${timestamp}] ${req.method} ${req.originalUrl}`);
+  }
+  res.send = function(body) {
+    const duration = Date.now() - start;
+    console.log(`[${timestamp}] ${req.method} ${req.originalUrl} - Status: ${res.statusCode} - Duration: ${duration}ms - Response:`, typeof body === 'string' ? body : JSON.stringify(body));
+    
+    return originalSend.call(this, body);
+  };
+  
+  next();
+});
+
 app.use(express.static('public'));
 
 // Get all todos
